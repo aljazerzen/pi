@@ -32,7 +32,7 @@ export class Loader extends Text {
 		message: string = "Loading...",
 		indicator?: LoaderIndicatorOptions,
 	) {
-		super("", 1, 0);
+		super("", 0, 0);
 		this.ui = ui;
 		this.spinnerColorFn = spinnerColorFn;
 		this.messageColorFn = messageColorFn;

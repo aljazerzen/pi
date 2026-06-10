@@ -34,7 +34,8 @@ export interface ToolRenderers {
 
 import { getTextOutput as getRenderedTextOutput } from "../../../core/tools/render-utils.ts";
 import { convertToPng } from "../../../utils/image-convert.ts";
-import { theme } from "../theme/theme.ts";
+import { type ThemeColor, theme } from "../theme/theme.ts";
+import { applyGutter, GUTTER_WIDTH, noBg } from "./gutter.ts";
 import { keyHint } from "./keybinding-hints.ts";
 
 const FALLBACK_PREVIEW_LINES = 10;
@@ -49,7 +50,7 @@ export class ToolExecutionComponent extends Container {
 	private contentText: Text;
 	private contentTextRegion: MouseRegion;
 	private selfRenderContainer: Container;
-	private selfRenderHeight = 0;
+	private renderedContentHeight = 0;
 	private callRendererComponent?: Component;
 	private resultRendererComponent?: Component;
 	private rendererState: any = {};
@@ -94,13 +95,12 @@ export class ToolExecutionComponent extends Container {
 		this.ui = ui;
 		this.cwd = cwd;
 
-		this.addChild(new Spacer(1));
-
 		// Always create all shell variants. contentBox is used for default renderer-based composition.
 		// selfRenderContainer is used when the tool renders its own framing.
 		// contentText is reserved for generic fallback rendering when no tool definition exists.
-		this.contentBox = new Box(1, 1, (text: string) => theme.bg("toolPendingBg", text));
-		this.contentText = new Text("", 1, 1, (text: string) => theme.bg("toolPendingBg", text));
+		// No backgrounds: state is conveyed by the colored gutter applied in render().
+		this.contentBox = new Box(0, 0, noBg);
+		this.contentText = new Text("", 0, 0, noBg);
 		this.contentTextRegion = this.createResultRegion(this.contentText);
 		this.selfRenderContainer = new Container();
 
@@ -251,23 +251,32 @@ export class ToolExecutionComponent extends Container {
 		this.updateDisplay();
 	}
 
+	private gutterColor(): ThemeColor {
+		return this.isPartial ? "warning" : this.result?.isError ? "error" : "success";
+	}
+
 	override render(width: number): string[] {
 		if (this.hideComponent) {
 			return [];
 		}
 
+		const color = this.gutterColor();
+		const inner = Math.max(1, width - GUTTER_WIDTH);
+
 		if (this.hasRendererDefinition() && this.getRenderShell() === "self") {
-			const contentLines = this.selfRenderContainer.render(width);
-			this.selfRenderHeight = contentLines.length;
+			const contentLines = this.selfRenderContainer.render(inner);
+			this.renderedContentHeight = contentLines.length;
 			if (contentLines.length === 0 && this.imageComponents.length === 0) {
 				return [];
 			}
 
 			const lines: string[] = [];
 			if (contentLines.length > 0) {
-				lines.push("");
-				lines.push(...contentLines);
+				// Leading blank line without a gutter, for visual separation.
+				lines.push("", ...applyGutter(contentLines, color));
 			}
+			// Images are rendered at full width without a gutter to avoid corrupting
+			// the terminal image escape sequences.
 			for (let i = 0; i < this.imageComponents.length; i++) {
 				const spacer = this.imageSpacers[i];
 				if (spacer) {
@@ -281,32 +290,53 @@ export class ToolExecutionComponent extends Container {
 			return lines;
 		}
 
-		return super.render(width);
+		// Default / fallback path: gutter the text content, leave images untouched.
+		const contentSource = this.hasRendererDefinition() ? this.contentBox : this.contentText;
+		const contentLines = contentSource.render(inner);
+		this.renderedContentHeight = contentLines.length;
+		const lines: string[] = [];
+		if (contentLines.length > 0) {
+			// Leading blank line without a gutter, for visual separation.
+			lines.push("", ...applyGutter(contentLines, color));
+		}
+		for (let i = 0; i < this.imageComponents.length; i++) {
+			const spacer = this.imageSpacers[i];
+			if (spacer) {
+				lines.push(...spacer.render(width));
+			}
+			const imageComponent = this.imageComponents[i];
+			if (imageComponent) {
+				lines.push(...imageComponent.render(width));
+			}
+		}
+		return lines;
 	}
 
 	override handleMouse(event: TuiMouseEvent): ReturnType<Container["handleMouse"]> {
-		if (!this.hasRendererDefinition() || this.getRenderShell() !== "self") return super.handleMouse(event);
-		if (event.y <= 0 || event.y > this.selfRenderHeight) return undefined;
-		return this.selfRenderContainer.handleMouse({
+		// Content is drawn after a leading blank line and a gutter bar, so shift
+		// coordinates before forwarding to the content components.
+		if (event.y <= 0 || event.y > this.renderedContentHeight) return undefined;
+		const adjusted: TuiMouseEvent = {
 			...event,
+			x: event.x - GUTTER_WIDTH,
 			y: event.y - 1,
-			height: this.selfRenderHeight,
-		});
+			width: Math.max(1, event.width - GUTTER_WIDTH),
+			height: this.renderedContentHeight,
+		};
+		if (this.hasRendererDefinition() && this.getRenderShell() === "self") {
+			return this.selfRenderContainer.handleMouse(adjusted);
+		}
+		return super.handleMouse(adjusted);
 	}
 
 	private updateDisplay(): void {
-		const bgFn = this.isPartial
-			? (text: string) => theme.bg("toolPendingBg", text)
-			: this.result?.isError
-				? (text: string) => theme.bg("toolErrorBg", text)
-				: (text: string) => theme.bg("toolSuccessBg", text);
-
+		// Backgrounds removed: tool state is shown via the colored gutter in render().
 		let hasContent = false;
 		this.hideComponent = false;
 		if (this.hasRendererDefinition()) {
 			const renderContainer = this.getRenderShell() === "self" ? this.selfRenderContainer : this.contentBox;
 			if (renderContainer instanceof Box) {
-				renderContainer.setBgFn(bgFn);
+				renderContainer.setBgFn(noBg);
 			}
 			renderContainer.clear();
 
@@ -357,7 +387,7 @@ export class ToolExecutionComponent extends Container {
 				}
 			}
 		} else {
-			this.contentText.setCustomBgFn(bgFn);
+			this.contentText.setCustomBgFn(noBg);
 			this.contentText.setText(this.formatToolExecution());
 			hasContent = true;
 		}

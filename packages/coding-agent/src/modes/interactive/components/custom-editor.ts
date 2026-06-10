@@ -33,7 +33,7 @@ export class CustomEditor extends Editor {
 		this.workingStatusIndicator = indicator;
 	}
 
-	protected override renderTopBorder(width: number, hiddenLineCount: number): string {
+	protected override renderTopBorder(width: number, hiddenLineCount: number): string | undefined {
 		if (!this.embedWorkingStatus || !this.workingStatusIndicator || width <= 0) {
 			return super.renderTopBorder(width, hiddenLineCount);
 		}

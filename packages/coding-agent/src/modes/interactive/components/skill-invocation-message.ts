@@ -1,6 +1,7 @@
 import { Box, Markdown, type MarkdownTheme, Text } from "@earendil-works/pi-tui";
 import type { ParsedSkillBlock } from "../../../core/agent-session.ts";
 import { getMarkdownTheme, theme } from "../theme/theme.ts";
+import { applyGutter, GUTTER_WIDTH } from "./gutter.ts";
 import { keyText } from "./keybinding-hints.ts";
 
 /**
@@ -14,10 +15,15 @@ export class SkillInvocationMessageComponent extends Box {
 	private markdownTheme: MarkdownTheme;
 
 	constructor(skillBlock: ParsedSkillBlock, markdownTheme: MarkdownTheme = getMarkdownTheme()) {
-		super(1, 1, (t) => theme.bg("customMessageBg", t));
+		super(0, 0, (t) => t);
 		this.skillBlock = skillBlock;
 		this.markdownTheme = markdownTheme;
 		this.updateDisplay();
+	}
+
+	override render(width: number): string[] {
+		const body = applyGutter(super.render(Math.max(1, width - GUTTER_WIDTH)), "customMessageLabel");
+		return body.length === 0 ? body : ["", ...body];
 	}
 
 	setExpanded(expanded: boolean): void {

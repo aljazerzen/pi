@@ -36,7 +36,7 @@ type EditCallRenderComponent = Box & {
 	settledError?: boolean;
 };
 function createEditCallRenderComponent(): EditCallRenderComponent {
-	return Object.assign(new Box(1, 1, (text: string) => text), {
+	return Object.assign(new Box(0, 0, (text: string) => text), {
 		preview: undefined as EditPreview | undefined,
 		previewArgsKey: undefined as string | undefined,
 		previewPending: false,
@@ -112,29 +112,14 @@ function formatEditResult(
 
 	return undefined;
 }
-function getEditHeaderBg(
-	preview: EditPreview | undefined,
-	settledError: boolean | undefined,
-	theme: Theme,
-): (text: string) => string {
-	if (preview) {
-		if ("error" in preview) {
-			return (text: string) => theme.bg("toolErrorBg", text);
-		}
-		return (text: string) => theme.bg("toolSuccessBg", text);
-	}
-	if (settledError) {
-		return (text: string) => theme.bg("toolErrorBg", text);
-	}
-	return (text: string) => theme.bg("toolPendingBg", text);
-}
 function buildEditCallComponent(
 	component: EditCallRenderComponent,
 	args: RenderableEditArgs | undefined,
 	theme: Theme,
 	cwd: string,
 ): EditCallRenderComponent {
-	component.setBgFn(getEditHeaderBg(component.preview, component.settledError, theme));
+	// No background: tool state is conveyed by the gutter in ToolExecutionComponent.
+	component.setBgFn((text: string) => text);
 	component.clear();
 	component.addChild(new Text(formatEditCall(args, theme, cwd), 0, 0));
 

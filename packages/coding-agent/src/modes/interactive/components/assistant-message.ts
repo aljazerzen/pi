@@ -1,7 +1,16 @@
 import type { AssistantMessage } from "@earendil-works/pi-ai";
-import { Container, Markdown, type MarkdownTheme, MouseRegion, Spacer, Text } from "@earendil-works/pi-tui";
+import {
+	Container,
+	Markdown,
+	type MarkdownTheme,
+	MouseRegion,
+	Spacer,
+	Text,
+	type TuiMouseEvent,
+} from "@earendil-works/pi-tui";
 import type { MarkdownTransformer } from "../../../core/extensions/types.ts";
 import { getMarkdownTheme, theme } from "../theme/theme.ts";
+import { GUTTER_WIDTH } from "./gutter.ts";
 import { createMarkdownTransform } from "./markdown-transform.ts";
 
 const OSC133_ZONE_START = "\x1b]133;A\x07";
@@ -78,8 +87,17 @@ export class AssistantMessageComponent extends Container {
 	}
 
 	override render(width: number): string[] {
-		const lines = super.render(width);
-		if (this.hasToolCalls || lines.length === 0) {
+		// Agent responses and thinking use plain indentation (no gutter bar),
+		// but sit one column closer to the edge than guttered messages.
+		const indent = Math.max(0, GUTTER_WIDTH - 1);
+		const pad = " ".repeat(indent);
+		const body = super.render(Math.max(1, width - indent)).map((line) => pad + line);
+		if (body.length === 0) {
+			return body;
+		}
+		// Leading blank line for visual separation between messages.
+		const lines = ["", ...body];
+		if (this.hasToolCalls) {
 			return lines;
 		}
 
@@ -88,20 +106,26 @@ export class AssistantMessageComponent extends Container {
 		return lines;
 	}
 
+	override handleMouse(event: TuiMouseEvent): ReturnType<Container["handleMouse"]> {
+		// Content is drawn after a leading blank line and indented, so shift
+		// coordinates before forwarding to the content components.
+		const indent = Math.max(0, GUTTER_WIDTH - 1);
+		if (event.y <= 0) return undefined;
+		return super.handleMouse({
+			...event,
+			x: event.x - indent,
+			y: event.y - 1,
+			width: Math.max(1, event.width - indent),
+			height: Math.max(0, event.height - 1),
+		});
+	}
+
 	updateContent(message: AssistantMessage, isStreaming = this.isStreaming): void {
 		this.lastMessage = message;
 		this.isStreaming = isStreaming;
 
 		// Clear content container
 		this.contentContainer.clear();
-
-		const hasVisibleContent = message.content.some(
-			(c) => (c.type === "text" && c.text.trim()) || (c.type === "thinking" && c.thinking.trim()),
-		);
-
-		if (hasVisibleContent) {
-			this.contentContainer.addChild(new Spacer(1));
-		}
 
 		// Render content in order
 		let thinkingRunIndex = 0;

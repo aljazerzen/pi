@@ -142,13 +142,15 @@ describe("AssistantMessageComponent", () => {
 		);
 		const lines = component.render(80).map((line) => stripAnsi(line));
 
-		expect(lines.some((line) => line.includes(" hello"))).toBe(true);
-		expect(lines.some((line) => line.includes(" reasoning"))).toBe(true);
+		// Assistant messages are indented one column less than the gutter width,
+		// so outputPad=1 adds a second leading space on top of that indent.
+		expect(lines.some((line) => line.startsWith("  hello"))).toBe(true);
+		expect(lines.some((line) => line.startsWith("  reasoning"))).toBe(true);
 
 		component.setOutputPad(0);
 		const updatedLines = component.render(80).map((line) => stripAnsi(line));
-		expect(updatedLines.some((line) => line.startsWith("hello"))).toBe(true);
-		expect(updatedLines.some((line) => line.startsWith("reasoning"))).toBe(true);
+		expect(updatedLines.some((line) => line.startsWith(" hello") && !line.startsWith("  hello"))).toBe(true);
+		expect(updatedLines.some((line) => line.startsWith(" reasoning") && !line.startsWith("  reasoning"))).toBe(true);
 	});
 
 	test("chains Markdown transformers in registration order", () => {
@@ -158,7 +160,8 @@ describe("AssistantMessageComponent", () => {
 		const component = new AssistantMessageComponent(message, false, undefined, "Thinking...", 1, [
 			(markdown, context) => {
 				calls.push("formula");
-				expect(context).toEqual({ messageType: "assistant", isStreaming: false, availableWidth: 78 });
+				// availableWidth is render width minus the assistant indent (1) and outputPad (1 each side).
+				expect(context).toEqual({ messageType: "assistant", isStreaming: false, availableWidth: 77 });
 				return markdown.replace("$x^2$", "x²");
 			},
 			(markdown) => {
@@ -207,10 +210,10 @@ describe("AssistantMessageComponent", () => {
 			],
 		);
 
-		expect(stripAnsi(component.render(80).join("\n"))).toContain("answer (78)");
+		expect(stripAnsi(component.render(80).join("\n"))).toContain("answer (77)");
 		component.render(80);
-		expect(stripAnsi(component.render(60).join("\n"))).toContain("answer (58)");
-		expect(availableWidths).toEqual([78, 58]);
+		expect(stripAnsi(component.render(60).join("\n"))).toContain("answer (57)");
+		expect(availableWidths).toEqual([77, 57]);
 	});
 
 	test("continues the Markdown transformer chain when a transformer throws", () => {
@@ -263,15 +266,26 @@ describe("AssistantMessageComponent", () => {
 		]);
 	});
 
-	test("uses configured output padding for user messages", () => {
+	test("renders user messages directly after the gutter bar", () => {
 		initTheme("dark");
 
-		const paddedComponent = new UserMessageComponent("hello", undefined, 1);
-		const paddedLines = paddedComponent.render(40).map((line) => stripAnsi(line));
-		expect(paddedLines.some((line) => line.startsWith(" hello"))).toBe(true);
+		// User messages carry a gutter bar prefix ("\u2590 "); content sits
+		// directly after it with no extra padding.
+		const component = new UserMessageComponent("hello");
+		const lines = component.render(40).map((line) => stripAnsi(line));
+		expect(lines.some((line) => line.startsWith("\u2590 hello") && !line.startsWith("\u2590  hello"))).toBe(true);
+	});
 
-		const unpaddedComponent = new UserMessageComponent("hello", undefined, 0);
-		const unpaddedLines = unpaddedComponent.render(40).map((line) => stripAnsi(line));
-		expect(unpaddedLines.some((line) => line.startsWith("hello"))).toBe(true);
+	test("indents assistant messages one column less than guttered messages", () => {
+		initTheme("dark");
+
+		const component = new AssistantMessageComponent(createAssistantMessage([{ type: "text", text: "hello" }]));
+		const lines = component.render(40);
+		const visibleLine = lines.find((line) => line.includes("hello"));
+		const plainLine = visibleLine?.replaceAll(OSC133_ZONE_END, "").replaceAll(OSC133_ZONE_FINAL, "");
+
+		expect(plainLine).toBeDefined();
+		expect(plainLine?.startsWith("  hello")).toBe(true);
+		expect(plainLine?.startsWith("   hello")).toBe(false);
 	});
 });

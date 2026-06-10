@@ -762,7 +762,6 @@ export class InteractiveMode {
 		if (this.chatContainer.children.length > 0) {
 			this.chatContainer.addChild(new Spacer(1));
 		}
-		this.chatContainer.addChild(new DynamicBorder());
 		if (this.settingsManager.getCollapseChangelog()) {
 			const versionMatch = this.changelogMarkdown.match(/##\s+\[?(\d+\.\d+\.\d+)\]?/);
 			const latestVersion = versionMatch ? versionMatch[1] : this.version;
@@ -774,9 +773,7 @@ export class InteractiveMode {
 			this.chatContainer.addChild(
 				new Markdown(this.changelogMarkdown.trim(), 1, 0, this.getMarkdownThemeWithSettings()),
 			);
-			this.chatContainer.addChild(new Spacer(1));
 		}
-		this.chatContainer.addChild(new DynamicBorder());
 	}
 
 	private mountInteractiveTui(tui: TuiMainScreen | TuiAltScreen, components: readonly Component[]): void {
@@ -3546,7 +3543,7 @@ export class InteractiveMode {
 		}
 
 		const spacer = new Spacer(1);
-		const text = new Text(theme.fg("dim", message), 1, 0);
+		const text = new Text(theme.fg("dim", message), 2, 0);
 		this.chatContainer.addChild(spacer);
 		this.chatContainer.addChild(text);
 		this.lastStatusSpacer = spacer;
@@ -3641,7 +3638,6 @@ export class InteractiveMode {
 							const userComponent = new UserMessageComponent(
 								skillBlock.userMessage,
 								this.getMarkdownThemeWithSettings(),
-								this.outputPad,
 								this.getMarkdownTransformers(),
 							);
 							this.chatContainer.addChild(userComponent);
@@ -3650,7 +3646,6 @@ export class InteractiveMode {
 						const userComponent = new UserMessageComponent(
 							textContent,
 							this.getMarkdownThemeWithSettings(),
-							this.outputPad,
 							this.getMarkdownTransformers(),
 						);
 						this.chatContainer.addChild(userComponent);
@@ -4272,13 +4267,13 @@ export class InteractiveMode {
 
 	showError(errorMessage: string): void {
 		this.chatContainer.addChild(new Spacer(1));
-		this.chatContainer.addChild(new Text(theme.fg("error", `Error: ${errorMessage}`), this.outputPad, 0));
+		this.chatContainer.addChild(new Text(theme.fg("error", `Error: ${errorMessage}`), 2, 0));
 		this.ui.requestRender();
 	}
 
 	showWarning(warningMessage: string): void {
 		this.chatContainer.addChild(new Spacer(1));
-		this.chatContainer.addChild(new Text(theme.fg("warning", `Warning: ${warningMessage}`), 1, 0));
+		this.chatContainer.addChild(new Text(theme.fg("warning", `Warning: ${warningMessage}`), 2, 0));
 		this.ui.requestRender();
 	}
 
@@ -4719,11 +4714,7 @@ export class InteractiveMode {
 						this.outputPad = padding;
 						if (this.streamingComponent || this.session.isStreaming) {
 							for (const child of this.chatContainer.children) {
-								if (
-									child instanceof AssistantMessageComponent ||
-									child instanceof CustomMessageComponent ||
-									child instanceof UserMessageComponent
-								) {
+								if (child instanceof AssistantMessageComponent || child instanceof CustomMessageComponent) {
 									child.setOutputPad(padding);
 								}
 							}
@@ -6196,7 +6187,7 @@ export class InteractiveMode {
 			const currentName = this.sessionManager.getSessionName();
 			if (currentName) {
 				this.chatContainer.addChild(new Spacer(1));
-				this.chatContainer.addChild(new Text(theme.fg("dim", `Session name: ${currentName}`), 1, 0));
+				this.chatContainer.addChild(new Text(theme.fg("dim", `Session name: ${currentName}`), 2, 0));
 			} else {
 				this.showWarning("Usage: /name <name>");
 			}
@@ -6210,7 +6201,7 @@ export class InteractiveMode {
 			this.showWarning(`Session name was normalized from ${JSON.stringify(name)} to ${JSON.stringify(sessionName)}`);
 		}
 		this.chatContainer.addChild(new Spacer(1));
-		this.chatContainer.addChild(new Text(theme.fg("dim", `Session name set: ${sessionName ?? name}`), 1, 0));
+		this.chatContainer.addChild(new Text(theme.fg("dim", `Session name set: ${sessionName ?? name}`), 2, 0));
 		this.ui.requestRender();
 	}
 
@@ -6437,7 +6428,7 @@ export class InteractiveMode {
 				return;
 			}
 			this.chatContainer.addChild(new Spacer(1));
-			this.chatContainer.addChild(new Text(`${theme.fg("accent", "✓ New session started")}`, 1, 1));
+			this.chatContainer.addChild(new Text(`${theme.fg("accent", "✓ New session started")}`, 1, 0));
 			this.ui.requestRender();
 		} catch (error: unknown) {
 			await this.handleFatalRuntimeError("Failed to create session", error);
@@ -6472,7 +6463,7 @@ export class InteractiveMode {
 
 		this.chatContainer.addChild(new Spacer(1));
 		this.chatContainer.addChild(
-			new Text(`${theme.fg("accent", "✓ Debug log written")}\n${theme.fg("muted", debugLogPath)}`, 1, 1),
+			new Text(`${theme.fg("accent", "✓ Debug log written")}\n${theme.fg("muted", debugLogPath)}`, 1, 0),
 		);
 		this.ui.requestRender();
 	}

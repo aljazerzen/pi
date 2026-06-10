@@ -25,7 +25,7 @@ describe("status indicators", () => {
 		expect(lines).toEqual([" ".repeat(20), " ".repeat(20)]);
 	});
 
-	it("keeps the top border unchanged unless the editor opts in", () => {
+	it("renders no border status line unless the editor opts in", () => {
 		initTheme("dark");
 		const tui = {
 			requestRender: vi.fn(),
@@ -35,7 +35,8 @@ describe("status indicators", () => {
 		const indicator = new WorkingStatusIndicator(tui, "Working");
 		editor.setWorkingStatusIndicator(indicator);
 
-		expect(stripAnsi(editor.render(20)[0]!)).toBe("─".repeat(20));
+		// No border line is rendered; the first line is guttered editor content.
+		expect(stripAnsi(editor.render(20)[0]!)).not.toContain("─");
 		const standaloneLine = indicator.render(20)[1]!;
 		expect(standaloneLine).toContain(theme.getFgAnsi("accent"));
 		expect(standaloneLine).toContain(theme.getFgAnsi("muted"));
@@ -57,9 +58,10 @@ describe("status indicators", () => {
 		editor.setWorkingStatusIndicator(indicator);
 
 		const topBorder = editor.render(20)[0]!;
-		expect(stripAnsi(topBorder)).toBe("── ⠋ Working ───────");
+		expect(stripAnsi(topBorder)).toBe("▐ ── ⠋ Working ─────");
 		expect(visibleWidth(topBorder)).toBe(20);
-		expect(topBorder.split(theme.getFgAnsi("thinkingHigh"))).toHaveLength(5);
+		// Gutter bar plus border segments are all drawn in the thinking border color.
+		expect(topBorder.split(theme.getFgAnsi("thinkingHigh"))).toHaveLength(6);
 		indicator.dispose();
 	});
 
@@ -82,14 +84,15 @@ describe("status indicators", () => {
 				editor.setWorkingStatusIndicator(indicator);
 				const label = stripAnsi(indicator.render(120)[1]!).trim();
 				expect(stripAnsi(editor.render(120)[0]!)).toContain(`── ${label} `);
-				for (const width of [1, 4, 10, 20, 80, 120]) {
+				// Widths below the gutter width (2) plus one content column are not supported.
+				for (const width of [4, 10, 20, 80, 120]) {
 					expect(visibleWidth(editor.render(width)[0]!)).toBe(width);
 				}
 			}
 			vi.advanceTimersByTime(1000);
 			expect(stripAnsi(editor.render(120)[0]!)).toContain("Retrying (1/3) in 2s");
 			editor.setWorkingStatusIndicator(undefined);
-			expect(stripAnsi(editor.render(120)[0]!)).toBe("─".repeat(120));
+			expect(stripAnsi(editor.render(120)[0]!)).not.toContain("─");
 		} finally {
 			for (const indicator of indicators) indicator.dispose();
 		}

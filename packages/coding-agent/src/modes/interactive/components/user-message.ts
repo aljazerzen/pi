@@ -1,6 +1,7 @@
-import { Box, Container, Markdown, type MarkdownTheme } from "@earendil-works/pi-tui";
+import { Container, Markdown, type MarkdownTheme } from "@earendil-works/pi-tui";
 import type { MarkdownTransformer } from "../../../core/extensions/types.ts";
 import { getMarkdownTheme, theme } from "../theme/theme.ts";
+import { applyGutter, GUTTER_WIDTH } from "./gutter.ts";
 import { createMarkdownTransform } from "./markdown-transform.ts";
 
 const OSC133_ZONE_START = "\x1b]133;A\x07";
@@ -8,57 +9,41 @@ const OSC133_ZONE_END = "\x1b]133;B\x07";
 const OSC133_ZONE_FINAL = "\x1b]133;C\x07";
 
 /**
- * Component that renders a user message
+ * Component that renders a user message.
+ *
+ * Styling: no background. The message is marked with a colored `▌` gutter bar
+ * down its left edge.
  */
 export class UserMessageComponent extends Container {
-	private text: string;
-	private markdownTheme: MarkdownTheme;
-	private outputPad: number;
-	private markdownTransformers: readonly MarkdownTransformer[];
-
 	constructor(
 		text: string,
 		markdownTheme: MarkdownTheme = getMarkdownTheme(),
-		outputPad = 1,
 		markdownTransformers: readonly MarkdownTransformer[] = [],
 	) {
 		super();
-		this.text = text;
-		this.markdownTheme = markdownTheme;
-		this.outputPad = outputPad;
-		this.markdownTransformers = markdownTransformers;
-		this.rebuild();
-	}
-
-	setOutputPad(padding: number): void {
-		this.outputPad = padding;
-		this.rebuild();
-	}
-
-	private rebuild(): void {
-		this.clear();
-		const contentBox = new Box(this.outputPad, 1, (content: string) => theme.bg("userMessageBg", content));
-		contentBox.addChild(
+		// Content sits directly after the gutter bar; the gutter provides the
+		// horizontal offset, so no additional Markdown padding is applied.
+		this.addChild(
 			new Markdown(
-				this.text,
+				text,
 				0,
 				0,
-				this.markdownTheme,
+				markdownTheme,
 				{
 					color: (content: string) => theme.fg("userMessageText", content),
 				},
 				{
 					preserveOrderedListMarkers: true,
 					preserveBackslashEscapes: true,
-					transform: createMarkdownTransform("user", false, this.markdownTransformers),
+					transform: createMarkdownTransform("user", false, markdownTransformers),
 				},
 			),
 		);
-		this.addChild(contentBox);
 	}
 
 	override render(width: number): string[] {
-		const lines = super.render(width);
+		const inner = super.render(Math.max(1, width - GUTTER_WIDTH));
+		const lines = applyGutter(inner, "accent");
 		if (lines.length === 0) {
 			return lines;
 		}

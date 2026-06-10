@@ -1,6 +1,7 @@
 import { Box, Markdown, type MarkdownTheme, Spacer, Text } from "@earendil-works/pi-tui";
 import type { CompactionSummaryMessage } from "../../../core/messages.ts";
 import { getMarkdownTheme, theme } from "../theme/theme.ts";
+import { applyGutter, GUTTER_WIDTH } from "./gutter.ts";
 import { keyText } from "./keybinding-hints.ts";
 
 /**
@@ -13,10 +14,15 @@ export class CompactionSummaryMessageComponent extends Box {
 	private markdownTheme: MarkdownTheme;
 
 	constructor(message: CompactionSummaryMessage, markdownTheme: MarkdownTheme = getMarkdownTheme()) {
-		super(1, 1, (t) => theme.bg("customMessageBg", t));
+		super(0, 0, (t) => t);
 		this.message = message;
 		this.markdownTheme = markdownTheme;
 		this.updateDisplay();
+	}
+
+	override render(width: number): string[] {
+		const body = applyGutter(super.render(Math.max(1, width - GUTTER_WIDTH)), "customMessageLabel");
+		return body.length === 0 ? body : ["", ...body];
 	}
 
 	setExpanded(expanded: boolean): void {

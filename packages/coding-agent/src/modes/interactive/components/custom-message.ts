@@ -1,9 +1,10 @@
 import type { TextContent } from "@earendil-works/pi-ai";
 import type { Component } from "@earendil-works/pi-tui";
-import { Box, Container, Markdown, type MarkdownTheme, Spacer, Text } from "@earendil-works/pi-tui";
+import { Container, Markdown, type MarkdownTheme, Spacer, Text } from "@earendil-works/pi-tui";
 import type { MessageRenderer } from "../../../core/extensions/types.ts";
 import type { CustomMessage } from "../../../core/messages.ts";
 import { getMarkdownTheme, theme } from "../theme/theme.ts";
+import { applyGutter, GUTTER_WIDTH } from "./gutter.ts";
 
 /**
  * Component that renders a custom message entry from extensions.
@@ -12,11 +13,12 @@ import { getMarkdownTheme, theme } from "../theme/theme.ts";
 export class CustomMessageComponent extends Container {
 	private message: CustomMessage<unknown>;
 	private customRenderer?: MessageRenderer;
-	private box: Box;
+	private box: Container;
 	private customComponent?: Component;
 	private markdownTheme: MarkdownTheme;
 	private _expanded = false;
 	private outputPad: number;
+	private usingCustomComponent = false;
 
 	constructor(
 		message: CustomMessage<unknown>,
@@ -30,10 +32,8 @@ export class CustomMessageComponent extends Container {
 		this.markdownTheme = markdownTheme;
 		this.outputPad = outputPad;
 
-		this.addChild(new Spacer(1));
-
-		// Create box with purple background (used for default rendering)
-		this.box = new Box(1, 1, (t) => theme.bg("customMessageBg", t));
+		// Plain container used for default rendering (gutter is applied in render()).
+		this.box = new Container();
 
 		this.rebuild();
 	}
@@ -76,6 +76,7 @@ export class CustomMessageComponent extends Container {
 				if (component) {
 					// Custom renderer provides its own styled component
 					this.customComponent = component;
+					this.usingCustomComponent = true;
 					this.addChild(component);
 					return;
 				}
@@ -85,6 +86,7 @@ export class CustomMessageComponent extends Container {
 		}
 
 		// Default rendering uses our box
+		this.usingCustomComponent = false;
 		this.addChild(this.box);
 		this.box.clear();
 
@@ -109,5 +111,15 @@ export class CustomMessageComponent extends Container {
 				color: (text: string) => theme.fg("customMessageText", text),
 			}),
 		);
+	}
+
+	override render(width: number): string[] {
+		// Custom renderers own their styling; render them untouched.
+		// Leading blank line without a gutter, for visual separation between messages.
+		if (this.usingCustomComponent) {
+			return ["", ...super.render(width)];
+		}
+		const body = applyGutter(super.render(Math.max(1, width - GUTTER_WIDTH)), "customMessageLabel");
+		return body.length === 0 ? body : ["", ...body];
 	}
 }

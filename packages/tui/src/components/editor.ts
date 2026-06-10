@@ -495,20 +495,23 @@ export class Editor implements Component, Focusable {
 		// No cached state to invalidate currently
 	}
 
-	protected renderTopBorder(width: number, hiddenLineCount: number): string {
-		const border = hiddenLineCount > 0 ? createScrollBorder("↑", hiddenLineCount, width) : "─".repeat(width);
-		return this.borderColor(border);
+	// No full-width border lines; the left gutter provides framing. A line is
+	// only emitted for scroll indicators (or status overrides in subclasses).
+	protected renderTopBorder(width: number, hiddenLineCount: number): string | undefined {
+		return hiddenLineCount > 0 ? this.borderColor(createScrollBorder("↑", hiddenLineCount, width)) : undefined;
 	}
 
-	protected renderBottomBorder(width: number, hiddenLineCount: number): string {
-		const border = hiddenLineCount > 0 ? createScrollBorder("↓", hiddenLineCount, width) : "─".repeat(width);
-		return this.borderColor(border);
+	protected renderBottomBorder(width: number, hiddenLineCount: number): string | undefined {
+		return hiddenLineCount > 0 ? this.borderColor(createScrollBorder("↓", hiddenLineCount, width)) : undefined;
 	}
 
 	render(width: number): string[] {
-		const maxPadding = Math.max(0, Math.floor((width - 1) / 2));
+		// Reserve space for a left gutter bar ("▐ ") drawn instead of box borders.
+		const GUTTER_WIDTH = 2;
+		const innerWidth = Math.max(1, width - GUTTER_WIDTH);
+		const maxPadding = Math.max(0, Math.floor((innerWidth - 1) / 2));
 		const paddingX = Math.min(this.paddingX, maxPadding);
-		const contentWidth = Math.max(1, width - paddingX * 2);
+		const contentWidth = Math.max(1, innerWidth - paddingX * 2);
 
 		// Layout width: with padding the cursor can overflow into it,
 		// without padding we reserve 1 column for the cursor.
@@ -547,8 +550,12 @@ export class Editor implements Component, Focusable {
 		const leftPadding = " ".repeat(paddingX);
 		const rightPadding = leftPadding;
 
-		// Render top border (with scroll indicator if scrolled down)
-		result.push(this.renderTopBorder(width, this.scrollOffset));
+		// Top scroll indicator or embedded status (no border line; the left
+		// gutter provides framing)
+		const topBorder = this.renderTopBorder(innerWidth, this.scrollOffset);
+		if (topBorder !== undefined) {
+			result.push(topBorder);
+		}
 
 		// Render each visible layout line
 		// Emit hardware cursor marker when focused so TUI can position the
@@ -598,9 +605,12 @@ export class Editor implements Component, Focusable {
 			result.push(`${leftPadding}${displayText}${padding}${lineRightPadding}`);
 		}
 
-		// Render bottom border (with scroll indicator if more content below)
+		// Bottom scroll indicator (no border line; the left gutter provides framing)
 		const linesBelow = layoutLines.length - (this.scrollOffset + visibleLines.length);
-		result.push(this.renderBottomBorder(width, linesBelow));
+		const bottomBorder = this.renderBottomBorder(innerWidth, linesBelow);
+		if (bottomBorder !== undefined) {
+			result.push(bottomBorder);
+		}
 
 		// Add autocomplete list if active
 		this.renderedAutocompleteHeight = 0;
@@ -614,7 +624,9 @@ export class Editor implements Component, Focusable {
 			}
 		}
 
-		return result;
+		// Prefix every line with the gutter bar in the active border color.
+		const bar = `${this.borderColor("▐")} `;
+		return result.map((line) => bar + line);
 	}
 
 	handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
