@@ -204,6 +204,7 @@ export interface MarkdownTheme {
 	code: (text: string) => string;
 	codeBlock: (text: string) => string;
 	codeBlockBorder: (text: string) => string;
+	tableBorder?: (text: string) => string;
 	quote: (text: string) => string;
 	quoteBorder: (text: string) => string;
 	hr: (text: string) => string;
@@ -847,6 +848,15 @@ export class Markdown implements Component {
 	): string[] {
 		const lines: string[] = [];
 		const numCols = token.header.length;
+		const tableBorder = (text: string): string => this.theme.tableBorder?.(text) ?? text;
+		const renderTableRow = (parts: string[]): string => {
+			let line = tableBorder("│ ");
+			for (let i = 0; i < parts.length; i++) {
+				line += parts[i];
+				line += tableBorder(i === parts.length - 1 ? " │" : " │ ");
+			}
+			return line;
+		};
 
 		if (numCols === 0) {
 			return lines;
@@ -958,7 +968,7 @@ export class Markdown implements Component {
 
 		// Render top border
 		const topBorderCells = columnWidths.map((w) => "─".repeat(w));
-		lines.push(`┌─${topBorderCells.join("─┬─")}─┐`);
+		lines.push(tableBorder(`┌─${topBorderCells.join("─┬─")}─┐`));
 
 		// Render header with wrapping
 		const headerCellLines: string[][] = token.header.map((cell, i) => {
@@ -973,12 +983,12 @@ export class Markdown implements Component {
 				const padded = text + " ".repeat(Math.max(0, columnWidths[colIdx] - visibleWidth(text)));
 				return this.theme.bold(padded);
 			});
-			lines.push(`│ ${rowParts.join(" │ ")} │`);
+			lines.push(renderTableRow(rowParts));
 		}
 
 		// Render separator
 		const separatorCells = columnWidths.map((w) => "─".repeat(w));
-		const separatorLine = `├─${separatorCells.join("─┼─")}─┤`;
+		const separatorLine = tableBorder(`├─${separatorCells.join("─┼─")}─┤`);
 		lines.push(separatorLine);
 
 		// Render rows with wrapping
@@ -995,7 +1005,7 @@ export class Markdown implements Component {
 					const text = cellLines[lineIdx] || "";
 					return text + " ".repeat(Math.max(0, columnWidths[colIdx] - visibleWidth(text)));
 				});
-				lines.push(`│ ${rowParts.join(" │ ")} │`);
+				lines.push(renderTableRow(rowParts));
 			}
 
 			if (rowIndex < token.rows.length - 1) {
@@ -1005,7 +1015,7 @@ export class Markdown implements Component {
 
 		// Render bottom border
 		const bottomBorderCells = columnWidths.map((w) => "─".repeat(w));
-		lines.push(`└─${bottomBorderCells.join("─┴─")}─┘`);
+		lines.push(tableBorder(`└─${bottomBorderCells.join("─┴─")}─┘`));
 
 		if (nextTokenType && nextTokenType !== "space") {
 			lines.push(""); // Add spacing after table

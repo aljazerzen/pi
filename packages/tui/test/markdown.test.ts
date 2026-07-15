@@ -350,6 +350,14 @@ describe("Markdown component", () => {
 			// Check for table borders
 			assert.ok(plainLines.some((line) => line.includes("│")));
 			assert.ok(plainLines.some((line) => line.includes("─")));
+
+			const topBorderLine = lines.find((line) => stripAnsi(line).includes("┌"));
+			assert.ok(topBorderLine?.includes("\x1b[2m"), `Expected dim table border styling: ${topBorderLine}`);
+
+			const headerLine = lines.find((line) => stripAnsi(line).includes("Name") && stripAnsi(line).includes("Age"));
+			assert.ok(headerLine, "Expected header line");
+			const borderSegments = headerLine.match(/\x1b\[2m/g) ?? [];
+			assert.ok(borderSegments.length >= 3, `Expected styled vertical borders across row: ${headerLine}`);
 		});
 
 		it("should render row dividers between data rows", () => {
