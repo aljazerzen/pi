@@ -99,6 +99,7 @@ Pi loads:
 
 - `~/.pi/agent/AGENTS.md` for global instructions
 - `AGENTS.md` or `CLAUDE.md` from parent directories and the current directory
+- `AGENTS.local.md` or `CLAUDE.local.md` alongside those, for machine-local, gitignored instructions
 
 If a directory contains `AGENTS.override.md`, Pi loads it instead of `AGENTS.md` or `CLAUDE.md` from that directory.
 

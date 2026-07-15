@@ -392,6 +392,20 @@ Content`,
 			consoleError.mockRestore();
 		});
 
+		it("should load AGENTS.local.md in addition to AGENTS.md", async () => {
+			writeFileSync(join(cwd, "AGENTS.md"), "# Shared");
+			writeFileSync(join(cwd, "AGENTS.local.md"), "# Local");
+
+			const loader = new DefaultResourceLoader({ cwd, agentDir });
+			await loader.reload();
+
+			const { agentsFiles } = loader.getAgentsFiles();
+			const shared = agentsFiles.findIndex((f) => f.path === join(cwd, "AGENTS.md"));
+			const local = agentsFiles.findIndex((f) => f.path === join(cwd, "AGENTS.local.md"));
+			expect(shared).toBeGreaterThanOrEqual(0);
+			expect(local).toBeGreaterThan(shared);
+		});
+
 		it("should skip context file discovery when noContextFiles is true", async () => {
 			writeFileSync(join(cwd, "AGENTS.override.md"), "# Override Guidelines\n\nBe helpful.");
 			writeFileSync(join(cwd, "AGENTS.md"), "# Project Guidelines\n\nBe helpful.");

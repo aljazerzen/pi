@@ -68,25 +68,33 @@ function resolvePromptInput(input: string | undefined, description: string): str
 	return input;
 }
 
-function loadContextFileFromDir(dir: string): { path: string; content: string } | null {
-	const candidates = ["AGENTS.override.md", "AGENTS.md", "AGENTS.MD", "CLAUDE.md", "CLAUDE.MD"];
-	for (const filename of candidates) {
-		const filePath = join(dir, filename);
-		if (existsSync(filePath)) {
-			try {
-				if (!statSync(filePath).isFile()) {
-					continue;
+// Each group contributes at most one file per directory (first match wins). The
+// `.local.md` group is loaded in addition to the primary group so a project can
+// keep machine-local, gitignored context alongside the shared AGENTS.md.
+const CONTEXT_FILE_CANDIDATE_GROUPS = [
+	["AGENTS.override.md", "AGENTS.md", "AGENTS.MD", "CLAUDE.md", "CLAUDE.MD"],
+	["AGENTS.local.md", "AGENTS.local.MD", "CLAUDE.local.md", "CLAUDE.local.MD"],
+];
+
+function loadContextFilesFromDir(dir: string): Array<{ path: string; content: string }> {
+	const files: Array<{ path: string; content: string }> = [];
+	for (const candidates of CONTEXT_FILE_CANDIDATE_GROUPS) {
+		for (const filename of candidates) {
+			const filePath = join(dir, filename);
+			if (existsSync(filePath)) {
+				try {
+					if (!statSync(filePath).isFile()) {
+						continue;
+					}
+					files.push({ path: filePath, content: stripBom(readFileSync(filePath, "utf-8")) });
+				} catch (error) {
+					console.error(chalk.yellow(`Warning: Could not read ${filePath}: ${error}`));
 				}
-				return {
-					path: filePath,
-					content: stripBom(readFileSync(filePath, "utf-8")),
-				};
-			} catch (error) {
-				console.error(chalk.yellow(`Warning: Could not read ${filePath}: ${error}`));
+				break;
 			}
 		}
 	}
-	return null;
+	return files;
 }
 
 /**
@@ -98,22 +106,21 @@ function loadContextFileFromDir(dir: string): { path: string; content: string } 
  * file's `gitdir:` target in realpath form while cwd may still be symlinked
  * (macOS `/tmp` -> `/private/tmp`).
  */
-function findShadowedContextFile(cwd: string): string | undefined {
+function findShadowedContextFiles(cwd: string): Set<string> {
 	const gitPaths = findGitPaths(cwd);
-	if (!gitPaths) return undefined;
+	if (!gitPaths) return new Set();
 	const commonGitDir = canonicalizePath(gitPaths.commonGitDir);
 	const worktreeRoot = canonicalizePath(gitPaths.repoDir);
 	const mainRepoRoot = dirname(commonGitDir);
 	// False for an ordinary repo, where the two are the same dir, and for a sibling
 	// worktree (`git worktree add ../feat`), whose main repo is not an ancestor.
-	if (!worktreeRoot.startsWith(`${mainRepoRoot}${sep}`)) return undefined;
+	if (!worktreeRoot.startsWith(`${mainRepoRoot}${sep}`)) return new Set();
 	// dirname of the common git dir is the main worktree root only when that dir is
 	// itself checked out from the same repo. In a bare layout (`proj/.bare` +
 	// `proj/main`) it is just the directory holding `.bare`, which tracks nothing; a
 	// submodule's gitdir has no `commondir`, so it lands under `.git/modules`.
-	if (canonicalizePath(join(mainRepoRoot, ".git")) !== commonGitDir) return undefined;
-	const worktreeContextFile = loadContextFileFromDir(worktreeRoot);
-	return worktreeContextFile ? join(mainRepoRoot, basename(worktreeContextFile.path)) : undefined;
+	if (canonicalizePath(join(mainRepoRoot, ".git")) !== commonGitDir) return new Set();
+	return new Set(loadContextFilesFromDir(worktreeRoot).map((file) => join(mainRepoRoot, basename(file.path))));
 }
 
 export function loadProjectContextFiles(options: {
@@ -126,24 +133,27 @@ export function loadProjectContextFiles(options: {
 	const contextFiles: Array<{ path: string; content: string }> = [];
 	const seenPaths = new Set<string>();
 
-	const globalContext = loadContextFileFromDir(resolvedAgentDir);
-	if (globalContext) {
-		contextFiles.push(globalContext);
-		seenPaths.add(globalContext.path);
+	for (const globalContext of loadContextFilesFromDir(resolvedAgentDir)) {
+		if (!seenPaths.has(globalContext.path)) {
+			contextFiles.push(globalContext);
+			seenPaths.add(globalContext.path);
+		}
 	}
 
 	const ancestorContextFiles: Array<{ path: string; content: string }> = [];
 
-	const shadowedContextFile = findShadowedContextFile(resolvedCwd);
+	const shadowedContextFiles = findShadowedContextFiles(resolvedCwd);
 	let currentDir = resolvedCwd;
 
 	while (true) {
-		const contextFile = loadContextFileFromDir(currentDir);
-		const isShadowed =
-			shadowedContextFile !== undefined && canonicalizePath(contextFile?.path ?? "") === shadowedContextFile;
-		if (contextFile && !isShadowed && !seenPaths.has(contextFile.path)) {
-			ancestorContextFiles.unshift(contextFile);
-			seenPaths.add(contextFile.path);
+		const dirContextFiles = loadContextFilesFromDir(currentDir).filter(
+			(file) => !seenPaths.has(file.path) && !shadowedContextFiles.has(canonicalizePath(file.path)),
+		);
+		for (const file of dirContextFiles) {
+			seenPaths.add(file.path);
+		}
+		if (dirContextFiles.length > 0) {
+			ancestorContextFiles.unshift(...dirContextFiles);
 		}
 
 		const parentDir = dirname(currentDir);

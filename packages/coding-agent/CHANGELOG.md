@@ -768,6 +768,7 @@
 - Added inherited native `xhigh` and `max` thinking levels for Claude Fable 5 across all generated provider catalogs ([#6490](https://github.com/earendil-works/pi-mono/pull/6490) by [@davidbrai](https://github.com/davidbrai)).
 - Added `Ctrl+X` to copy the last assistant message, or the selected message in `/tree`.
 - Added inherited `toolChoice` support for OpenAI and Codex Responses, including required and named tool selection ([#6588](https://github.com/earendil-works/pi-mono/pull/6588) by [@xl0](https://github.com/xl0)).
+- Added `AGENTS.local.md`/`CLAUDE.local.md` context file discovery, loaded in addition to the shared `AGENTS.md`/`CLAUDE.md` in each directory for machine-local, gitignored instructions.
 
 ### Fixed
 

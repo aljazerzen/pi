@@ -106,6 +106,8 @@ Pi loads `AGENTS.md` or `CLAUDE.md` at startup from:
 
 If a directory contains `AGENTS.override.md`, Pi loads it instead of `AGENTS.md` or `CLAUDE.md` from that directory. Context files from other directories still layer normally.
 
+In each directory, an `AGENTS.local.md` or `CLAUDE.local.md` file is loaded in addition to `AGENTS.md`/`CLAUDE.md`. Use it for machine-local, gitignored instructions.
+
 Use context files for project conventions, commands, safety rules, and preferences. Disable loading with `--no-context-files` or `-nc`.
 
 ### System Prompt Files
