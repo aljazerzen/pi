@@ -1,0 +1,111 @@
+{
+  "nodes": {
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1785090369,
+        "narHash": "sha256-m0pDuRJG7EDo9ri+4Ksu83VsI+PlxNC9lNBfydejce4=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "624af665418d3c65d544145b4d34ad696439570e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "pi-anthropic-auth": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1784683438,
+        "narHash": "sha256-Wan/3ahAH0fTRWACjA3TjvazumNvkwF2cmjDWAySUUc=",
+        "owner": "gotgenes",
+        "repo": "pi-anthropic-auth",
+        "rev": "22883511d16d3fe381b140fb1de10b428c2c8a89",
+        "type": "github"
+      },
+      "original": {
+        "owner": "gotgenes",
+        "repo": "pi-anthropic-auth",
+        "type": "github"
+      }
+    },
+    "pi-formatter": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1776345512,
+        "narHash": "sha256-z9R9acrNJbHW0rTPwNvqf4PjsL2bvZwTOCpyL9JFojs=",
+        "owner": "tenzir",
+        "repo": "pi-formatter",
+        "rev": "3b82ccbdcee6d0b831f731b305d70c350f53a9fd",
+        "type": "github"
+      },
+      "original": {
+        "owner": "tenzir",
+        "repo": "pi-formatter",
+        "type": "github"
+      }
+    },
+    "pi-service-tier": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1784831207,
+        "narHash": "sha256-vJ1VqoTbFwoxJTwLRiDSOs5n2xohObBOQk8GhMi0bvc=",
+        "owner": "mavam",
+        "repo": "pi-service-tier",
+        "rev": "c8d2c6dbba9890996bda20469c7c40d7bf2c9aeb",
+        "type": "github"
+      },
+      "original": {
+        "owner": "mavam",
+        "repo": "pi-service-tier",
+        "type": "github"
+      }
+    },
+    "pi-terminal-theme": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1783277586,
+        "narHash": "sha256-QVQ3g2zCIxQ1rBetOfGqSXsZ/8DodfdBsGj7obNhLnM=",
+        "owner": "mavam",
+        "repo": "pi-terminal-theme",
+        "rev": "3bd1c02162d73b9af0c96a6cef59bc230b90c999",
+        "type": "github"
+      },
+      "original": {
+        "owner": "mavam",
+        "repo": "pi-terminal-theme",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "nixpkgs": "nixpkgs",
+        "pi-anthropic-auth": "pi-anthropic-auth",
+        "pi-formatter": "pi-formatter",
+        "pi-service-tier": "pi-service-tier",
+        "pi-terminal-theme": "pi-terminal-theme",
+        "systems": "systems"
+      }
+    },
+    "systems": {
+      "locked": {
+        "lastModified": 1681028828,
+        "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
+        "owner": "nix-systems",
+        "repo": "default",
+        "rev": "da67096a3b9bf56a91d16901293e51ba5b49a27e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-systems",
+        "repo": "default",
+        "type": "github"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

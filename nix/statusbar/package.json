@@ -1,0 +1,17 @@
+{
+  "name": "pi-statusbar",
+  "version": "0.1.0",
+  "description": "Single-line status bar for pi: directory, provider/model, thinking, context and plan usage",
+  "type": "module",
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}
