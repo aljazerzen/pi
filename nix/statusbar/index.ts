@@ -3,12 +3,12 @@
  *
  * Renders a single footer line:
  *
- *   directory • provider/model-id • thinking • context-bar used/total • plan-bar % (resets …)
+ *   directory • provider/model-id • thinking • context-bar used/total • plan-bar % (…) • bar % (…)
  *
- * The "plan usage" gauge reflects the provider's primary quota window (the
- * 5h rolling limit for Claude/Codex subscription plans). Usage is read from
- * the same OAuth credentials pi stores for `/login`, refreshed periodically
- * and opportunistically after each provider response.
+ * A provider may report multiple quota windows (Claude: 5h session + weekly;
+ * Codex: weekly), each rendered as its own gauge with the time until it
+ * resets. Usage is read from the same OAuth credentials pi stores for
+ * `/login`, refreshed periodically.
  */
 
 import { readFile, mkdir, rename, writeFile } from "node:fs/promises";
@@ -27,18 +27,22 @@ const CODEX_USAGE_ENDPOINT = "https://chatgpt.com/backend-api/wham/usage";
 const CODEX_TOKEN_URL = "https://auth.openai.com/oauth/token";
 const CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
 
-const REFRESH_MS = 60_000; // poll provider usage every minute
-const CACHE_TTL_MS = 55_000;
+const REFRESH_MS = 10 * 60_000; // poll provider usage every 10 minutes
+const CACHE_TTL_MS = 9 * 60_000;
 const USAGE_CACHE_PATH = homePath(".pi/agent/plan-usage-cache.json");
 
 type ProviderId = "anthropic" | "openai-codex";
 
-interface PlanUsage {
-  // Percentage of the primary (5h) window that has been used, 0..100.
+interface PlanGauge {
+  // Percentage of this quota window that has been used, 0..100.
   usedPercent: number;
-  fetchedAt: number;
-  // Epoch milliseconds when the primary window resets, if known.
+  // Epoch milliseconds when the window resets, if known.
   resetsAtMs?: number;
+}
+
+interface PlanUsage {
+  gauges: PlanGauge[];
+  fetchedAt: number;
 }
 
 interface AuthCredentials {
@@ -235,6 +239,31 @@ function resolveResetAt(...sources: Array<Record<string, unknown> | undefined>):
   return undefined;
 }
 
+// Drop windows without usable data and collapse duplicates (same reset time).
+function normalizeGauges(gauges: Array<PlanGauge | undefined>): PlanGauge[] {
+  const out: PlanGauge[] = [];
+  for (const gauge of gauges) {
+    if (!gauge) continue;
+    if (out.some((existing) => existing.resetsAtMs === gauge.resetsAtMs)) continue;
+    out.push(gauge);
+  }
+  // Soonest reset first (session before weekly); unknown resets last.
+  return out.sort((a, b) => (a.resetsAtMs ?? Infinity) - (b.resetsAtMs ?? Infinity));
+}
+
+function gaugeFrom(
+  window: Record<string, unknown> | undefined,
+  ...percentKeys: string[]
+): PlanGauge | undefined {
+  if (!window) return undefined;
+  for (const key of percentKeys) {
+    const used = numberValue(window[key]);
+    if (used === undefined) continue;
+    return { usedPercent: clampPercent(used), resetsAtMs: resolveResetAt(window) };
+  }
+  return undefined;
+}
+
 async function fetchClaudeUsage(auth: AuthCredentials): Promise<PlanUsage | undefined> {
   for (let attempt = 0; attempt < 2; attempt++) {
     const response = await fetch(CLAUDE_USAGE_ENDPOINT, {
@@ -250,11 +279,12 @@ async function fetchClaudeUsage(auth: AuthCredentials): Promise<PlanUsage | unde
     }
     if (!response.ok) return undefined;
     const obj = objectValue(await response.json());
-    const fiveHour = objectValue(obj?.five_hour);
-    const util = numberValue(fiveHour?.utilization);
-    if (util === undefined) return undefined;
-    const resetsAtMs = resolveResetAt(fiveHour);
-    return { usedPercent: clampPercent(util), fetchedAt: Date.now(), resetsAtMs };
+    const gauges = normalizeGauges([
+      gaugeFrom(objectValue(obj?.five_hour), "utilization", "used_percent"),
+      gaugeFrom(objectValue(obj?.seven_day), "utilization", "used_percent"),
+    ]);
+    if (gauges.length === 0) return undefined;
+    return { gauges, fetchedAt: Date.now() };
   }
   return undefined;
 }
@@ -276,14 +306,14 @@ async function fetchCodexUsage(auth: AuthCredentials): Promise<PlanUsage | undef
     if (!response.ok) return undefined;
     const obj = objectValue(await response.json());
     const rateLimit = objectValue(obj?.rate_limit);
-    const primary = objectValue(rateLimit?.primary_window);
-    const used =
-      numberValue(primary?.used_percent) ??
-      numberValue(rateLimit?.used_percent) ??
-      numberValue(obj?.used_percent);
-    if (used === undefined) return undefined;
-    const resetsAtMs = resolveResetAt(primary, rateLimit, obj);
-    return { usedPercent: clampPercent(used), fetchedAt: Date.now(), resetsAtMs };
+    const gauges = normalizeGauges([
+      gaugeFrom(objectValue(rateLimit?.primary_window), "used_percent", "utilization"),
+      gaugeFrom(objectValue(rateLimit?.secondary_window), "used_percent", "utilization"),
+      gaugeFrom(rateLimit, "used_percent"),
+      gaugeFrom(obj, "used_percent"),
+    ]);
+    if (gauges.length === 0) return undefined;
+    return { gauges: gauges.slice(0, 2), fetchedAt: Date.now() };
   }
   return undefined;
 }
@@ -300,10 +330,18 @@ async function readUsageCache(provider: ProviderId): Promise<PlanUsage | undefin
     const parsed = JSON.parse(await readFile(USAGE_CACHE_PATH, "utf8")) as unknown;
     const obj = objectValue(parsed);
     const entry = objectValue(obj?.[provider]);
-    const usedPercent = numberValue(entry?.usedPercent);
     const fetchedAt = numberValue(entry?.fetchedAt);
-    if (usedPercent === undefined || fetchedAt === undefined) return undefined;
-    return { usedPercent, fetchedAt, resetsAtMs: numberValue(entry?.resetsAtMs) };
+    const rawGauges = Array.isArray(entry?.gauges) ? entry.gauges : [];
+    if (fetchedAt === undefined) return undefined;
+    const gauges: PlanGauge[] = [];
+    for (const raw of rawGauges) {
+      const gauge = objectValue(raw);
+      const usedPercent = numberValue(gauge?.usedPercent);
+      if (usedPercent === undefined) continue;
+      gauges.push({ usedPercent, resetsAtMs: numberValue(gauge?.resetsAtMs) });
+    }
+    if (gauges.length === 0) return undefined;
+    return { gauges, fetchedAt };
   } catch {
     return undefined;
   }
@@ -372,7 +410,7 @@ function formatTokens(n: number): string {
   return `${n}`;
 }
 
-// Compact relative time until reset, e.g. "2h13m", "45m", "30s".
+// Compact relative time until reset, e.g. "3d", "2h13m", "45m", "30s".
 function formatReset(resetsAtMs: number | undefined): string {
   if (resetsAtMs === undefined) return "";
   const deltaMs = resetsAtMs - Date.now();
@@ -380,6 +418,7 @@ function formatReset(resetsAtMs: number | undefined): string {
   const totalMin = Math.floor(deltaMs / 60_000);
   const hours = Math.floor(totalMin / 60);
   const mins = totalMin % 60;
+  if (hours >= 24) return `${Math.floor(hours / 24)}d`;
   if (hours > 0) return `${hours}h${mins.toString().padStart(2, "0")}m`;
   if (totalMin > 0) return `${totalMin}m`;
   return `${Math.max(1, Math.floor(deltaMs / 1000))}s`;
@@ -391,6 +430,10 @@ function formatThinking(level: string): string {
 }
 
 export default function (pi: ExtensionAPI) {
+  // Set by the active footer instance so model/provider switches can force an
+  // immediate refresh instead of waiting for the next poll.
+  let refreshNow: (() => void) | undefined;
+
   function install(ctx: ExtensionContext) {
     if (!ctx.hasUI) return;
 
@@ -402,18 +445,20 @@ export default function (pi: ExtensionAPI) {
 
       const refresh = async () => {
         if (disposed) return;
-        provider = providerForModel(ctx);
-        if (!provider) {
+        const next = providerForModel(ctx);
+        if (next !== provider) {
+          // Don't show the previous provider's gauges under the new model.
+          provider = next;
           usage = undefined;
           tui.requestRender();
-          return;
         }
+        if (!provider) return;
         // File cache TTL is checked inside fetchPlanUsage; no need to skip here.
         try {
-          const next = await fetchPlanUsage(provider);
-          if (disposed) return;
-          if (next) {
-            usage = next;
+          const fetched = await fetchPlanUsage(provider);
+          if (disposed || provider !== providerForModel(ctx)) return;
+          if (fetched) {
+            usage = fetched;
             tui.requestRender();
           }
         } catch {
@@ -426,13 +471,19 @@ export default function (pi: ExtensionAPI) {
         timer = setTimeout(() => void refresh().finally(schedule), REFRESH_MS);
       };
 
-      void refresh();
-      schedule();
+      const restart = () => {
+        if (timer) clearTimeout(timer);
+        void refresh().finally(schedule);
+      };
+
+      refreshNow = restart;
+      restart();
 
       return {
         invalidate() {},
         dispose() {
           disposed = true;
+          if (refreshNow === restart) refreshNow = undefined;
           if (timer) clearTimeout(timer);
         },
         render(width: number): string[] {
@@ -482,17 +533,17 @@ export default function (pi: ExtensionAPI) {
               theme.fg("dim", ` ${formatTokens(usedTokens)}/${formatTokens(totalTokens)}`),
           );
 
-          // plan usage bar
-          if (usage) {
-            const planBar = progressBar(usage.usedPercent);
-            const planColor = severityColor(usage.usedPercent);
-            const reset = formatReset(usage.resetsAtMs);
+          // plan usage gauges (one per quota window)
+          for (const [index, gauge] of (usage?.gauges ?? []).entries()) {
+            const planBar = progressBar(gauge.usedPercent);
+            const planColor = severityColor(gauge.usedPercent);
+            const reset = formatReset(gauge.resetsAtMs);
             parts.push(
-              theme.fg("dim", "plan ") +
+              (index === 0 ? theme.fg("dim", "plan ") : "") +
                 theme.fg(planColor, planBar.filled) +
                 theme.fg("dim", planBar.empty) +
                 theme.fg("dim", ` ${planBar.label}`) +
-                (reset ? theme.fg("dim", ` (resets ${reset})`) : ""),
+                (reset ? theme.fg("dim", ` (${reset})`) : ""),
             );
           }
 
@@ -505,6 +556,11 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("session_start", async (_event, ctx) => {
     install(ctx);
+  });
+
+  pi.on("model_select", async () => {
+    // Provider/model changed: fetch the new provider's quota right away.
+    refreshNow?.();
   });
 
   pi.on("after_provider_response", async (_event, ctx) => {
