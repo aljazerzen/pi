@@ -395,6 +395,38 @@ function progressBar(usedPercent: number): { filled: string; empty: string; labe
   return { filled, empty, label: `${Math.round(usedPercent)}%` };
 }
 
+const ANSI_PATTERN = /\x1b\[[0-9;]*m/g;
+
+// Visible width of a styled string (ANSI escapes excluded). All glyphs used by
+// this footer are single-width, so counting code points is sufficient.
+function plainWidth(text: string): number {
+  return [...text.replace(ANSI_PATTERN, "")].length;
+}
+
+// Hard truncate a styled string, keeping escape sequences intact.
+function truncateStyled(text: string, max: number): string {
+  if (max <= 0) return "";
+  if (plainWidth(text) <= max) return text;
+  let out = "";
+  let used = 0;
+  let index = 0;
+  while (index < text.length) {
+    if (text[index] === "\x1b") {
+      const match = /^\x1b\[[0-9;]*m/.exec(text.slice(index));
+      if (match) {
+        out += match[0];
+        index += match[0].length;
+        continue;
+      }
+    }
+    if (used >= max - 1) break;
+    out += text[index];
+    used += 1;
+    index += 1;
+  }
+  return `${out}…\x1b[0m`;
+}
+
 function severityColor(usedPercent: number): "success" | "warning" | "error" {
   if (usedPercent >= 90) return "error";
   if (usedPercent >= 70) return "warning";
@@ -513,42 +545,60 @@ export default function (pi: ExtensionAPI) {
               : (usedTokens * 100) / totalTokens,
           );
 
-          const parts: string[] = [];
+          // Each segment has a bar variant and a text-only fallback. The TUI
+          // throws if a rendered line exceeds the terminal width, so drop the
+          // progress bars first and truncate only as a last resort.
+          const segments: Array<{ bar: string; text: string }> = [];
 
           // directory
-          parts.push(theme.fg("dim", dir));
+          segments.push({ bar: theme.fg("dim", dir), text: theme.fg("dim", dir) });
 
           // provider/model
-          parts.push(theme.fg("dim", modelText));
+          segments.push({ bar: theme.fg("dim", modelText), text: theme.fg("dim", modelText) });
 
           // thinking level
-          if (thinking) parts.push(theme.fg("dim", thinking));
+          if (thinking) {
+            segments.push({ bar: theme.fg("dim", thinking), text: theme.fg("dim", thinking) });
+          }
 
           // context usage bar / total
           const ctxBar = progressBar(ctxPercent);
           const ctxColor = severityColor(ctxPercent);
-          parts.push(
-            theme.fg(ctxColor, ctxBar.filled) +
+          const ctxTokens = `${formatTokens(usedTokens)}/${formatTokens(totalTokens)}`;
+          segments.push({
+            bar:
+              theme.fg(ctxColor, ctxBar.filled) +
               theme.fg("dim", ctxBar.empty) +
-              theme.fg("dim", ` ${formatTokens(usedTokens)}/${formatTokens(totalTokens)}`),
-          );
+              theme.fg("dim", ` ${ctxTokens}`),
+            text: theme.fg(ctxColor, ctxBar.label) + theme.fg("dim", ` ${ctxTokens}`),
+          });
 
           // plan usage gauges (one per quota window)
           for (const [index, gauge] of (usage?.gauges ?? []).entries()) {
             const planBar = progressBar(gauge.usedPercent);
             const planColor = severityColor(gauge.usedPercent);
             const reset = formatReset(gauge.resetsAtMs);
-            parts.push(
-              (index === 0 ? theme.fg("dim", "plan ") : "") +
+            const prefix = index === 0 ? theme.fg("dim", "plan ") : "";
+            const suffix = reset ? theme.fg("dim", ` (${reset})`) : "";
+            segments.push({
+              bar:
+                prefix +
                 theme.fg(planColor, planBar.filled) +
                 theme.fg("dim", planBar.empty) +
                 theme.fg("dim", ` ${planBar.label}`) +
-                (reset ? theme.fg("dim", ` (${reset})`) : ""),
-            );
+                suffix,
+              text: prefix + theme.fg(planColor, planBar.label) + suffix,
+            });
           }
 
-          const line = parts.join(theme.fg("dim", SEP));
-          return [line];
+          const separator = theme.fg("dim", SEP);
+          const withBars = segments.map((segment) => segment.bar).join(separator);
+          if (plainWidth(withBars) <= width) return [withBars];
+
+          const textOnly = segments.map((segment) => segment.text).join(separator);
+          if (plainWidth(textOnly) <= width) return [textOnly];
+
+          return [truncateStyled(textOnly, width)];
         },
       };
     });
