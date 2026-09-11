@@ -78,7 +78,7 @@ buildNpmPackage {
 
   buildPhase = ''
     runHook preBuild
-    npm run build --workspace=packages/tui --workspace=packages/ai --workspace=packages/agent --workspace=packages/coding-agent
+    npm run build --workspace=packages/chord --workspace=packages/tui --workspace=packages/telemetry --workspace=packages/ai --workspace=packages/agent --workspace=packages/coding-agent
     runHook postBuild
   '';
 
@@ -86,7 +86,7 @@ buildNpmPackage {
     runHook preInstall
     mkdir -p $out/bin $out/lib/node_modules/@earendil-works
 
-    for pkg in tui ai agent coding-agent mom pods; do
+    for pkg in chord tui telemetry ai agent coding-agent mom pods; do
       [ -d "packages/$pkg/dist" ] || continue
       mkdir -p "$out/lib/node_modules/@earendil-works/pi-$pkg"
       cp -r packages/$pkg/dist/* "$out/lib/node_modules/@earendil-works/pi-$pkg/"

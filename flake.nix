@@ -35,7 +35,7 @@
     let
       lib = nixpkgs.lib;
       version = "unstable-${self.shortRev or "dirty"}";
-      npmDepsHash = "sha256-5pHRwxpKg95/phOcYHeWdvPJNtSOhiw7PRoVxsuh0RM=";
+      npmDepsHash = "sha256-gIOsizzbzDBLKefSUfifZPhZFwFEeUb9MLVrXbXhaNA=";
       forEachSystem = lib.genAttrs (import systems);
       mkExtension =
         pkgs: src:
