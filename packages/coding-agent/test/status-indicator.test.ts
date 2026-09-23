@@ -58,10 +58,10 @@ describe("status indicators", () => {
 		editor.setWorkingStatusIndicator(indicator);
 
 		const topBorder = editor.render(20)[0]!;
-		expect(stripAnsi(topBorder)).toBe("▐ ── ⠋ Working ─────");
+		expect(stripAnsi(topBorder)).toBe("▐ ⠋ Working         ");
 		expect(visibleWidth(topBorder)).toBe(20);
-		// Gutter bar plus border segments are all drawn in the thinking border color.
-		expect(topBorder.split(theme.getFgAnsi("thinkingHigh"))).toHaveLength(6);
+		// The gutter and working indicator use the thinking border color.
+		expect(topBorder.split(theme.getFgAnsi("thinkingHigh"))).toHaveLength(4);
 		indicator.dispose();
 	});
 

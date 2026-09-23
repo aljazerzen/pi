@@ -23,6 +23,7 @@ import type { Theme } from "../theme/theme.ts";
  */
 export interface ToolRenderers {
 	renderShell?: "default" | "self";
+	renderGutter?: "default" | "compact";
 	renderCall?: (args: any, theme: Theme, context: ToolRenderContext<any, any>) => Component;
 	renderResult?: (
 		result: AgentToolResult<any>,
@@ -33,12 +34,14 @@ export interface ToolRenderers {
 }
 
 import { getTextOutput as getRenderedTextOutput } from "../../../core/tools/render-utils.ts";
+import { stripAnsi } from "../../../utils/ansi.ts";
 import { convertToPng } from "../../../utils/image-convert.ts";
 import { type ThemeColor, theme } from "../theme/theme.ts";
 import { applyGutter, GUTTER_WIDTH, noBg } from "./gutter.ts";
 import { keyHint } from "./keybinding-hints.ts";
 
 const FALLBACK_PREVIEW_LINES = 10;
+const COMPACT_GUTTER_WIDTH = 1;
 
 export interface ToolExecutionOptions {
 	showImages?: boolean;
@@ -50,6 +53,7 @@ export class ToolExecutionComponent extends Container {
 	private contentText: Text;
 	private contentTextRegion: MouseRegion;
 	private selfRenderContainer: Container;
+	private renderedContentStart = 0;
 	private renderedContentHeight = 0;
 	private callRendererComponent?: Component;
 	private resultRendererComponent?: Component;
@@ -255,25 +259,36 @@ export class ToolExecutionComponent extends Container {
 		return this.isPartial ? "warning" : this.result?.isError ? "error" : "success";
 	}
 
+	private trimOuterBlankLines(lines: string[]): string[] {
+		let start = 0;
+		let end = lines.length;
+		while (start < end && stripAnsi(lines[start]).trim().length === 0) start++;
+		while (end > start && stripAnsi(lines[end - 1]).trim().length === 0) end--;
+		this.renderedContentStart = start;
+		this.renderedContentHeight = end - start;
+		return lines.slice(start, end);
+	}
+
 	override render(width: number): string[] {
 		if (this.hideComponent) {
 			return [];
 		}
 
 		const color = this.gutterColor();
-		const inner = Math.max(1, width - GUTTER_WIDTH);
+		const compactGutter = this.toolDefinition?.renderGutter === "compact";
+		const gutterSuffix = compactGutter ? "" : " ";
+		const gutterWidth = compactGutter ? COMPACT_GUTTER_WIDTH : GUTTER_WIDTH;
+		const inner = Math.max(1, width - gutterWidth);
 
 		if (this.hasRendererDefinition() && this.getRenderShell() === "self") {
-			const contentLines = this.selfRenderContainer.render(inner);
-			this.renderedContentHeight = contentLines.length;
+			const contentLines = this.trimOuterBlankLines(this.selfRenderContainer.render(inner));
 			if (contentLines.length === 0 && this.imageComponents.length === 0) {
 				return [];
 			}
 
 			const lines: string[] = [];
 			if (contentLines.length > 0) {
-				// Leading blank line without a gutter, for visual separation.
-				lines.push("", ...applyGutter(contentLines, color));
+				lines.push("", ...applyGutter(contentLines, color, gutterSuffix));
 			}
 			// Images are rendered at full width without a gutter to avoid corrupting
 			// the terminal image escape sequences.
@@ -292,12 +307,10 @@ export class ToolExecutionComponent extends Container {
 
 		// Default / fallback path: gutter the text content, leave images untouched.
 		const contentSource = this.hasRendererDefinition() ? this.contentBox : this.contentText;
-		const contentLines = contentSource.render(inner);
-		this.renderedContentHeight = contentLines.length;
+		const contentLines = this.trimOuterBlankLines(contentSource.render(inner));
 		const lines: string[] = [];
 		if (contentLines.length > 0) {
-			// Leading blank line without a gutter, for visual separation.
-			lines.push("", ...applyGutter(contentLines, color));
+			lines.push("", ...applyGutter(contentLines, color, gutterSuffix));
 		}
 		for (let i = 0; i < this.imageComponents.length; i++) {
 			const spacer = this.imageSpacers[i];
@@ -313,14 +326,15 @@ export class ToolExecutionComponent extends Container {
 	}
 
 	override handleMouse(event: TuiMouseEvent): ReturnType<Container["handleMouse"]> {
-		// Content is drawn after a leading blank line and a gutter bar, so shift
+		// Content is drawn after an external blank row and gutter bar, so shift
 		// coordinates before forwarding to the content components.
 		if (event.y <= 0 || event.y > this.renderedContentHeight) return undefined;
+		const gutterWidth = this.toolDefinition?.renderGutter === "compact" ? COMPACT_GUTTER_WIDTH : GUTTER_WIDTH;
 		const adjusted: TuiMouseEvent = {
 			...event,
-			x: event.x - GUTTER_WIDTH,
-			y: event.y - 1,
-			width: Math.max(1, event.width - GUTTER_WIDTH),
+			x: event.x - gutterWidth,
+			y: event.y - 1 + this.renderedContentStart,
+			width: Math.max(1, event.width - gutterWidth),
 			height: this.renderedContentHeight,
 		};
 		if (this.hasRendererDefinition() && this.getRenderShell() === "self") {
@@ -440,7 +454,7 @@ export class ToolExecutionComponent extends Container {
 		let text = theme.fg("toolTitle", theme.bold(this.toolName));
 		const content = JSON.stringify(this.args, null, 2);
 		if (content) {
-			text += `\n\n${content}`;
+			text += `\n${content}`;
 		}
 		const output = this.getTextOutput();
 		if (output) {

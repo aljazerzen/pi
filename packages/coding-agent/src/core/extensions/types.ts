@@ -86,9 +86,9 @@ import type {
 } from "../tools/index.ts";
 
 export type { ExecOptions, ExecResult } from "../exec.ts";
+export type { AppKeybinding, KeybindingsManager } from "../keybindings.ts";
 export type { BuildSystemPromptOptions } from "../system-prompt.ts";
 export type { AgentToolResult, AgentToolUpdateCallback, ToolExecutionMode };
-export type { AppKeybinding, KeybindingsManager } from "../keybindings.ts";
 
 // ============================================================================
 // UI Context
@@ -465,6 +465,8 @@ export interface ToolDefinition<TParams extends TSchema = TSchema, TDetails = un
 	constrainedSampling?: false | ConstrainedSamplingConfig;
 	/** Controls whether ToolExecutionComponent renders the standard colored shell or the tool renders its own framing. */
 	renderShell?: "default" | "self";
+	/** Controls the width of the standard colored gutter. */
+	renderGutter?: "default" | "compact";
 
 	/** Optional compatibility shim to prepare raw tool call arguments before schema validation. Must return an object conforming to TParams. */
 	prepareArguments?: (args: unknown) => Static<TParams>;

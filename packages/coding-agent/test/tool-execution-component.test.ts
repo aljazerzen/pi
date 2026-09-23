@@ -68,6 +68,49 @@ describe("ToolExecutionComponent parity", () => {
 		expect(rendered).toContain("custom result");
 	});
 
+	test("renders compact tool content below an external blank line", () => {
+		const toolDefinition: ToolDefinition = {
+			...createBaseToolDefinition(),
+			renderGutter: "compact",
+		};
+		const component = new ToolExecutionComponent(
+			"custom_tool",
+			"tool-compact-gutter",
+			{ task: "inspect files" },
+			{},
+			toolDefinition,
+			createFakeTui(),
+			process.cwd(),
+		);
+
+		const rendered = stripAnsi(
+			component
+				.render(120)
+				.map((line) => line.trimEnd())
+				.join("\n"),
+		);
+		expect(rendered).toMatch(/^\n▐custom_tool/);
+	});
+
+	test("limits the gutter to tool content", () => {
+		const toolDefinition: ToolDefinition = {
+			...createBaseToolDefinition(),
+			renderCall: () => new Text("\ncall\n\noutput\n", 0, 0),
+		};
+		const component = new ToolExecutionComponent(
+			"custom_tool",
+			"tool-content-gutter",
+			{},
+			{},
+			toolDefinition,
+			createFakeTui(),
+			process.cwd(),
+		);
+
+		const rendered = component.render(120).map((line) => stripAnsi(line).trimEnd());
+		expect(rendered).toEqual(["", "▐ call", "▐", "▐ output"]);
+	});
+
 	test("self-rendered empty tool rows take no layout space", () => {
 		const toolDefinition: ToolDefinition = {
 			...createBaseToolDefinition(),

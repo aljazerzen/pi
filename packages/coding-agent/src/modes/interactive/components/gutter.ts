@@ -17,8 +17,8 @@ export const noBg = (text: string): string => text;
  * Prefix each line with a colored `▐` gutter bar. Blank lines get the bar too,
  * producing a continuous vertical accent down the side of the message.
  */
-export function applyGutter(lines: string[], color: ThemeColor): string[] {
-	const bar = `${theme.fg(color, "▐")} `;
+export function applyGutter(lines: string[], color: ThemeColor, suffix = " "): string[] {
+	const bar = `${theme.fg(color, "▐")}${suffix}`;
 	return lines.map((line) => bar + line);
 }
 

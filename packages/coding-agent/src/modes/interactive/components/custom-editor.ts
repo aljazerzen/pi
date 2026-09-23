@@ -42,6 +42,10 @@ export class CustomEditor extends Editor {
 		let statusWidth = visibleWidth(status);
 		if (statusWidth === 0) return super.renderTopBorder(width, hiddenLineCount);
 
+		if (this.workingStatusIndicator.kind === "working") {
+			return status + " ".repeat(Math.max(0, width - statusWidth));
+		}
+
 		const overflowLabel = hiddenLineCount > 0 ? ` ↑ ${hiddenLineCount} more ` : undefined;
 		const overflowLabelWidth = overflowLabel ? visibleWidth(overflowLabel) : 0;
 		const overflowStart = Math.floor((width - overflowLabelWidth) / 2);

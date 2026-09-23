@@ -886,8 +886,8 @@ export class InteractiveMode {
 		this.fullscreenLayoutRoot = viewport.root;
 		this.mountInteractiveTui(this.renderer, [
 			this.documentContainer,
-			this.pendingMessagesContainer,
 			this.statusContainer,
+			this.pendingMessagesContainer,
 			this.widgetContainerAbove,
 			this.editorContainer,
 			this.widgetContainerBelow,
@@ -2091,7 +2091,8 @@ export class InteractiveMode {
 
 	private setEditorWorkingStatusIndicator(indicator: StatusIndicator | undefined): boolean {
 		this.defaultEditor.setWorkingStatusIndicator(undefined);
-		if (!isWorkingStatusEditor(this.editor)) return false;
+		// Keep the working status as a standalone row above queued messages and the prompt.
+		if (indicator?.kind === "working" || !isWorkingStatusEditor(this.editor)) return false;
 		this.editor.setWorkingStatusIndicator(indicator);
 		return true;
 	}
